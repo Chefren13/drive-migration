@@ -1,0 +1,20 @@
+# Google authentication
+credentials.json
+token.json
+googleAPIKey/
+googleClientSecret.txt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment files
+.env
+.env.*
+
+# Virtual environments
+venv/
+.venv/
+
+# Optional: don't store Proton CLI executable in Git
+proton-drive.exe
