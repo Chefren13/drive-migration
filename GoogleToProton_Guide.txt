@@ -1,0 +1,191 @@
+GOOGLE DRIVE TO PROTON DRIVE — SETUP AND USER GUIDE
+
+PURPOSE
+These scripts copy selected files/folders, or all of My Drive, from Google
+Drive to Proton Drive. Google originals are not deleted or changed.
+
+FILES
+- googleDrive.py: starts the complete migration workflow.
+- protonDrive.py: supplies Proton CLI connection, browsing, upload, and
+  verification functions. Keep both scripts in the same folder.
+- credentials.json: your Google OAuth Desktop app configuration.
+- proton-drive.exe: official Proton Drive CLI for Windows.
+You can rename the scripts to googleDrive.py and protonDrive.py. The Google
+script looks for protonDrive(1).py first, then protonDrive.py. Keep only the
+intended Proton helper version in that folder.
+
+REQUIREMENTS
+1. Python 3.10 or newer to run the source scripts.
+2. An internet connection and browser access for account sign-in.
+3. A Google account with access to the source files.
+4. A Proton account with enough available Drive storage.
+5. The official Proton Drive CLI for your operating system:
+   https://proton.me/download/drive/cli
+6. A writable project folder and local disk space for staging downloads.
+   Verification downloads a second copy of the current file. Allow space
+   for roughly twice the largest file, plus any retained failed files.
+7. Python packages (install from PowerShell or a terminal):
+   python -m pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+GOOGLE SETUP
+1. Open https://console.cloud.google.com/ and create or select a project.
+2. Enable the Google Drive API.
+3. Configure the OAuth consent screen / Google Auth Platform settings.
+   If the app is in external testing mode, add your account as a test user.
+4. Create an OAuth client with application type Desktop app.
+5. Download its JSON configuration and save it as credentials.json beside
+   the Google script. A service-account JSON file is not a substitute.
+6. On first launch, sign in through the browser and grant read-only Drive
+   access. The script saves token.json and reuses it on later launches.
+   If authorization is revoked or expires, sign-in may be needed again.
+
+PROTON SETUP
+Place proton-drive.exe beside the scripts on Windows. Alternatively, add
+its directory to PATH or set PROTON_DRIVE_CLI to the full executable path.
+PowerShell example (applies to this terminal session):
+   $env:PROTON_DRIVE_CLI = "C:\Tools\proton-drive.exe"
+
+Optional connection test in the folder containing the executable:
+   .\proton-drive.exe version
+   .\proton-drive.exe auth login
+   .\proton-drive.exe filesystem list /my-files --json
+
+The CLI handles browser login and session storage. On Linux, its default
+credential storage requires a working OS secret store such as libsecret.
+Refer to the official CLI documentation for platform setup:
+   https://proton.me/support/drive-cli
+
+START THE COMPLETE MIGRATION
+Open PowerShell; VS Code is not required:
+   cd C:\Project\drive-migration
+   python "googleDrive.py"
+
+1. The application connects to Google Drive.
+2. It finds the Proton CLI and checks the saved session. If the session
+   check fails, review the error. Answer y to start browser sign-in, or
+   press Enter to stop. Sign-in will not fix a network or CLI error.
+3. Choose migration mode:
+   1 = Browse and select files/folders.
+   2 = Migrate all of My Drive.
+   q = Cancel.
+4. Choose your Proton destination.
+5. Migration begins immediately after destination selection. There is no
+   additional upload-confirmation prompt.
+
+SELECT GOOGLE FILES AND FOLDERS (MODE 1)
+- Enter a displayed folder number to open it.
+- Enter a displayed file number to add that file to the selection.
+- Enter a 1,2,3 to add multiple displayed files or folders.
+- n = Next page; p = Previous page; b = Parent folder.
+- d = Finish selecting; q = Cancel.
+- all = Select everything in My Drive, even if browsing a nested folder.
+Enter d separately; for example, type a 8,10,11,18, press Enter, then type d.
+Folder selections include their nested contents. Repeated selections are
+processed once per Google file ID. There is no remove-selection command.
+
+MIGRATE ALL OF MY DRIVE (MODE 2)
+This selects every non-trashed item at the My Drive root, then recursively
+processes folders. It does not separately enumerate Shared drives or Shared
+with me. A folder visible within My Drive can include accessible shared
+content. Google shortcuts are unsupported and are reported as failures.
+
+SELECT THE PROTON DESTINATION
+- Enter a folder number to open it.
+- s = Select the current folder and start migration.
+- n = Create a remote folder, then enter it.
+- b = Go back; q = Cancel.
+Creating a folder changes Proton Drive immediately, even if you later cancel.
+
+WHAT HAPPENS DURING TRANSFER
+1. Recreate or reuse selected folder paths in Proton Drive.
+2. Download one Google file to a local staging folder beside the scripts.
+3. Upload that file to the selected Proton folder.
+4. Download the Proton copy into a separate verification folder.
+5. Compare SHA-256 hashes of the local source and Proton copy.
+6. If the hashes match, mark success and delete the local staging copy.
+7. If upload/verification fails, retain the local copy and continue.
+8. After the initial pass, retry failed uploads up to three additional times
+   (four total upload attempts per failed file).
+9. Print success/failure totals and save report.json.
+
+GOOGLE DOCUMENT CONVERSION
+- Google Docs -> .docx
+- Google Sheets -> .xlsx
+- Google Slides -> .pptx
+- Google Drawings -> .pdf
+Other Google-native types, including shortcuts, are unsupported. Exported
+Office/PDF files may not preserve every Google-specific feature. Version
+history, sharing permissions, comments, and original cloud metadata are not
+fully migrated. Names incompatible with local paths are sanitized; naming
+collisions may receive a Google file ID suffix.
+
+EXISTING PROTON FILES
+The upload uses --file-conflict-strategy skip and
+--folder-conflict-strategy merge. Existing files are not overwritten.
+A same-name file must pass content verification to count as success. If its
+content differs, the run reports a failure and retains the local copy.
+Ambiguous remote names can also cause verification failure.
+
+REPORTS AND FAILED FILES
+Each run creates a folder such as:
+   C:\Project\drive-migration\google-proton-xxxxxxxx
+Inside it, report.json records file status, attempts, errors, destinations,
+and retained local-file paths. Successful folder creation is not separately
+counted; folder failures can appear as report entries.
+- success: uploaded/existing content verified.
+- failed_upload: upload or verification failed; local file retained.
+- failed_download: Google download/export failed.
+- failed_folder: remote folder setup or Google folder enumeration failed.
+- downloading / pending_upload: the operation may have been interrupted.
+A cleanup_warning means verification succeeded but local cleanup had a problem.
+The report folder remains even if every file succeeds.
+
+CURRENT LIMITATIONS
+- Upload failures are retried during the same run; download/folder failures
+  do not enter that retry loop.
+- There is no automatic resume-from-report or retry-previous-run option.
+- A new run downloads selected Google files again. Retained files can be
+  uploaded manually, but manual CLI upload alone does not run the script's
+  SHA-256 verification.
+- Ctrl+C cancels. Existing downloaded files/report are retained where possible.
+- Verification adds a complete Proton download for every transferred file.
+
+RUN THE PROTON SCRIPT ALONE
+   python "protonDrive.py"
+It connects to Proton, lets you choose a destination, and asks for a local
+file/folder to upload. Press Enter at the source prompt to select only.
+This standalone mode does not run Google migration, hash verification,
+automatic retries, or the migration report.
+
+TROUBLESHOOTING
+CLI was not found:
+   Put the executable beside the scripts, set PROTON_DRIVE_CLI, or fix PATH.
+Unknown option --conflict-strategy:
+   Use the updated Proton script. Your tested CLI requires separate
+   --file-conflict-strategy and --folder-conflict-strategy options.
+Missing credentials.json:
+   Download OAuth Desktop app credentials and place them beside the script.
+ModuleNotFoundError:
+   Run the package-install command using the same Python used to launch.
+Upload succeeded but verification failed:
+   Keep the retained file. Check the report, remote filename conflicts,
+   network access, and the CLI download output before retrying.
+Disk space or permissions error:
+   Use a writable folder and free space for staging, verification, and failures.
+
+OPTIONAL WINDOWS EXECUTABLE BUILD
+Build on Windows using PyInstaller; keep the console enabled for input prompts.
+   python -m pip install pyinstaller
+For the original downloaded filenames:
+   python -m PyInstaller --noconfirm --clean --onedir --console --contents-directory "." --name GoogleToProton --add-data "protonDrive(1).py:." --collect-all googleapiclient "googleDrive(3).py"
+Copy credentials.json and proton-drive.exe into dist\GoogleToProton.
+Run:
+   .\dist\GoogleToProton\GoogleToProton.exe
+Keep the entire output folder together in a writable location. This build
+procedure still needs testing on Windows. Users of the packaged build do not
+need Python installed separately.
+
+ACCOUNT FILES
+Keep token.json private. Do not publish it, migration reports, or downloaded
+personal files in a public repository. Do not distribute your signed-in session
+with an application build. Each user should sign in with their own accounts.
